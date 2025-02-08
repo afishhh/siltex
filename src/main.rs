@@ -46,6 +46,9 @@ enum TexFormat {
     Bgra5551 = 0x0A,
     Bgra4444 = 0x0B,
     Pvrtc2Rgba = 0x84,
+    Pvrtc4Rgba = 0x85,
+    Pvrtc2Rgb = 0x86,
+    Pvrtc4Rgb = 0x87,
 }
 
 impl TexFormat {
@@ -55,6 +58,9 @@ impl TexFormat {
             0x0A => TexFormat::Bgra5551,
             0x0B => TexFormat::Bgra4444,
             0x84 => TexFormat::Pvrtc2Rgba,
+            0x85 => TexFormat::Pvrtc4Rgba,
+            0x86 => TexFormat::Pvrtc2Rgb,
+            0x87 => TexFormat::Pvrtc4Rgb,
             _ => return None,
         })
     }
@@ -63,23 +69,22 @@ impl TexFormat {
 fn main() -> ExitCode {
     let args = Args::parse();
 
-    let mut tex = match args.command {
-        Command::Tex2Png(ref tex2png) => std::fs::read(&tex2png.tex_path).unwrap(),
-    };
-
-    let out_path = match args.command {
-        Command::Tex2Png(ref tex2png) => tex2png.output_path.clone().unwrap_or_else(|| {
-            if tex2png.tex_path.extension().is_some_and(|e| e == "tex") {
-                tex2png
-                    .tex_path
-                    .strip_prefix(tex2png.tex_path.parent().unwrap())
-                    .unwrap()
-                    .with_extension("png")
-            } else {
-                eprintln!("No output path provided and tex path doesn't have .tex extension");
-                std::process::exit(1);
-            }
-        }),
+    let (mut tex, out_path) = match args.command {
+        Command::Tex2Png(tex2png) => (
+            std::fs::read(&tex2png.tex_path).unwrap(),
+            tex2png.output_path.unwrap_or_else(|| {
+                if tex2png.tex_path.extension().is_some_and(|e| e == "tex") {
+                    tex2png
+                        .tex_path
+                        .strip_prefix(tex2png.tex_path.parent().unwrap())
+                        .unwrap()
+                        .with_extension("png")
+                } else {
+                    eprintln!("No output path provided and tex path doesn't have .tex extension");
+                    std::process::exit(1);
+                }
+            }),
+        ),
     };
 
     if tex.len() < 32 {
