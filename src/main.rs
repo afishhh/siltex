@@ -44,6 +44,7 @@ struct TexHeader {
 enum TexFormat {
     Bgra8888 = 0x08,
     Bgra5551 = 0x0A,
+    Bgra4444 = 0x0B,
     Pvrtc2Rgba = 0x84,
 }
 
@@ -52,6 +53,7 @@ impl TexFormat {
         Some(match value {
             0x08 => TexFormat::Bgra8888,
             0x0A => TexFormat::Bgra5551,
+            0x0B => TexFormat::Bgra4444,
             0x84 => TexFormat::Pvrtc2Rgba,
             _ => return None,
         })
@@ -161,6 +163,50 @@ fn main() -> ExitCode {
                     | (((pixel_value & 0x1F) * 0xFF / 0x1F) << 16)
                     | ((pixel_value >> 15) * 0xFF000000);
                 // println!("{:016b} -> #{:08X}", pixel_value, rgba);
+                out.write(rgba.to_le_bytes());
+            }
+
+            temporary = unsafe {
+                let init = Vec::from_raw_parts(
+                    buffer.as_mut_ptr() as *mut u8,
+                    buffer.len(),
+                    buffer.capacity(),
+                );
+                std::mem::forget(buffer);
+                init
+            };
+
+            &temporary
+        }
+        TexFormat::Bgra4444 => {
+            eprintln!("warning: Assuming little-endian for BGRA4444 format");
+
+            assert_eq!(
+                header.width as usize * header.height as usize * 2,
+                pixels.len()
+            );
+
+            let mut buffer = vec![
+                MaybeUninit::<u8>::uninit();
+                header.width as usize * header.height as usize * 4
+            ];
+
+            for i in (0..pixels.len()).step_by(2) {
+                let pixel: &[u8; 2] = (&pixels[i..i + 2]).try_into().unwrap();
+                let out: &mut MaybeUninit<[u8; 4]> = unsafe {
+                    std::mem::transmute(
+                        std::convert::TryInto::<&mut [MaybeUninit<u8>; 4]>::try_into(
+                            &mut buffer[i << 1..(i << 1) + 4],
+                        )
+                        .unwrap_unchecked(),
+                    )
+                };
+
+                let pixel_value = u16::from_le_bytes(*pixel) as u32;
+                let rgba = (((pixel_value >> 8) & 0xF) * (0xFF / 0xF))
+                    | ((((pixel_value >> 4) & 0xF) * (0xFF / 0xF)) << 8)
+                    | (((pixel_value & 0xF) * (0xFF / 0xF)) << 16)
+                    | (((pixel_value >> 12) * (0xFF / 0xF)) << 24);
                 out.write(rgba.to_le_bytes());
             }
 
